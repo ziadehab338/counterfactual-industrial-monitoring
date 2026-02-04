@@ -19,12 +19,6 @@ Industrial ML models can predict potential system failures, but their decisions 
 - Matplotlib
 - Git/GitHub
 
-## project
-│
-├── notebooks/      # Experiments and baseline model
-├── src/            # Core implementation (later stages)
-├── data/           # Dataset files
-├── results/        # Model outputs and evaluation results
-└── requirements.txt
-
+## Status 
+Project initilzation phase - baseline model devlopment in progress
 
