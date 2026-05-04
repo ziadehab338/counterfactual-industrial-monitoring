@@ -1,0 +1,136 @@
+{
+  "binary": {
+    "train_accuracy": 0.969875,
+    "test_accuracy": 0.97,
+    "confusion_matrix": [
+      [
+        1929,
+        3
+      ],
+      [
+        57,
+        11
+      ]
+    ],
+    "classification_report": {
+      "No Failure": {
+        "precision": 0.9712990936555891,
+        "recall": 0.9984472049689441,
+        "f1-score": 0.9846860643185299,
+        "support": 1932.0
+      },
+      "Failure": {
+        "precision": 0.7857142857142857,
+        "recall": 0.16176470588235295,
+        "f1-score": 0.2682926829268293,
+        "support": 68.0
+      },
+      "accuracy": 0.97,
+      "macro avg": {
+        "precision": 0.8785066896849374,
+        "recall": 0.5801059554256486,
+        "f1-score": 0.6264893736226795,
+        "support": 2000.0
+      },
+      "weighted avg": {
+        "precision": 0.9649892101855847,
+        "recall": 0.97,
+        "f1-score": 0.9603286893512121,
+        "support": 2000.0
+      }
+    }
+  },
+  "failure_type": {
+    "train_accuracy": 1.0,
+    "test_accuracy": 0.9264705882352942,
+    "confusion_matrix": [
+      [
+        22,
+        1,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        16,
+        0,
+        0,
+        0
+      ],
+      [
+        2,
+        0,
+        16,
+        0,
+        0
+      ],
+      [
+        0,
+        1,
+        0,
+        7,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        2
+      ]
+    ],
+    "classification_report": {
+      "Heat Dissipation Failure": {
+        "precision": 0.9166666666666666,
+        "recall": 0.9565217391304348,
+        "f1-score": 0.9361702127659575,
+        "support": 23.0
+      },
+      "Overload Failure": {
+        "precision": 0.8888888888888888,
+        "recall": 1.0,
+        "f1-score": 0.9411764705882353,
+        "support": 16.0
+      },
+      "Power Failure": {
+        "precision": 1.0,
+        "recall": 0.8888888888888888,
+        "f1-score": 0.9411764705882353,
+        "support": 18.0
+      },
+      "Tool Wear Failure": {
+        "precision": 1.0,
+        "recall": 0.7777777777777778,
+        "f1-score": 0.875,
+        "support": 9.0
+      },
+      "Unknown": {
+        "precision": 0.6666666666666666,
+        "recall": 1.0,
+        "f1-score": 0.8,
+        "support": 2.0
+      },
+      "accuracy": 0.9264705882352942,
+      "macro avg": {
+        "precision": 0.8944444444444445,
+        "recall": 0.9246376811594204,
+        "f1-score": 0.8987046307884856,
+        "support": 68.0
+      },
+      "weighted avg": {
+        "precision": 0.9358660130718954,
+        "recall": 0.9264705882352942,
+        "f1-score": 0.926572277847309,
+        "support": 68.0
+      }
+    },
+    "classes": [
+      "Heat Dissipation Failure",
+      "Overload Failure",
+      "Power Failure",
+      "Tool Wear Failure",
+      "Unknown"
+    ]
+  }
+}
