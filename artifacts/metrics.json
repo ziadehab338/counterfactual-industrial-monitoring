@@ -1,41 +1,41 @@
 {
   "binary": {
-    "train_accuracy": 0.969875,
-    "test_accuracy": 0.97,
+    "train_accuracy": 0.957625,
+    "test_accuracy": 0.961,
     "confusion_matrix": [
       [
-        1929,
-        3
+        1883,
+        49
       ],
       [
-        57,
-        11
+        29,
+        39
       ]
     ],
     "classification_report": {
       "No Failure": {
-        "precision": 0.9712990936555891,
-        "recall": 0.9984472049689441,
-        "f1-score": 0.9846860643185299,
+        "precision": 0.9848326359832636,
+        "recall": 0.9746376811594203,
+        "f1-score": 0.9797086368366286,
         "support": 1932.0
       },
       "Failure": {
-        "precision": 0.7857142857142857,
-        "recall": 0.16176470588235295,
-        "f1-score": 0.2682926829268293,
+        "precision": 0.4431818181818182,
+        "recall": 0.5735294117647058,
+        "f1-score": 0.5,
         "support": 68.0
       },
-      "accuracy": 0.97,
+      "accuracy": 0.961,
       "macro avg": {
-        "precision": 0.8785066896849374,
-        "recall": 0.5801059554256486,
-        "f1-score": 0.6264893736226795,
+        "precision": 0.7140072270825409,
+        "recall": 0.774083546462063,
+        "f1-score": 0.7398543184183143,
         "support": 2000.0
       },
       "weighted avg": {
-        "precision": 0.9649892101855847,
-        "recall": 0.97,
-        "f1-score": 0.9603286893512121,
+        "precision": 0.9664165081780145,
+        "recall": 0.961,
+        "f1-score": 0.9633985431841832,
         "support": 2000.0
       }
     }
@@ -87,7 +87,7 @@
         "f1-score": 0.9361702127659575,
         "support": 23.0
       },
-      "Overload Failure": {
+      "Overstrain Failure": {
         "precision": 0.8888888888888888,
         "recall": 1.0,
         "f1-score": 0.9411764705882353,
@@ -127,7 +127,7 @@
     },
     "classes": [
       "Heat Dissipation Failure",
-      "Overload Failure",
+      "Overstrain Failure",
       "Power Failure",
       "Tool Wear Failure",
       "Unknown"

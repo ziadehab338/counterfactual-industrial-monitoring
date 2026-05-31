@@ -2,6 +2,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Dict, List, Optional, Tuple
 import json
+import html
 
 import joblib
 import numpy as np
@@ -23,6 +24,12 @@ try:
     DICE_AVAILABLE = True
 except Exception:
     DICE_AVAILABLE = False
+
+try:
+    from alibi.explainers import AnchorTabular
+    ANCHOR_AVAILABLE = True
+except Exception:
+    ANCHOR_AVAILABLE = False
 
 
 st.set_page_config(
@@ -56,6 +63,9 @@ NUMERIC_FEATURES = [
 FAILURE_TYPE_COLUMNS = ["TWF", "HDF", "PWF", "OSF", "RNF"]
 
 
+# ==========================================
+# UI Styling
+# ==========================================
 def inject_global_css() -> None:
     st.markdown(
         dedent(
@@ -68,32 +78,26 @@ def inject_global_css() -> None:
                         linear-gradient(135deg, #05111f 0%, #0a1730 44%, #08121e 100%);
                     color: #eef6ff;
                 }
-
                 [data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"] {
                     background: transparent !important;
                 }
-
                 section[data-testid="stSidebar"] { display: none !important; }
-
                 .block-container {
                     max-width: 1450px;
                     padding-top: 1rem;
                     padding-bottom: 2rem;
                 }
-
                 .section-title {
                     font-size: 1.34rem;
                     font-weight: 800;
                     margin-bottom: 0.45rem;
                     color: #ffffff;
                 }
-
                 .section-subtitle {
                     color: #bfdbfe;
                     margin-bottom: 1rem;
                     line-height: 1.6;
                 }
-
                 .glass-card {
                     background: rgba(10, 20, 40, 0.64);
                     border: 1px solid rgba(255,255,255,0.09);
@@ -102,7 +106,6 @@ def inject_global_css() -> None:
                     box-shadow: 0 22px 60px rgba(0,0,0,0.28);
                     backdrop-filter: blur(16px);
                 }
-
                 .metric-card {
                     background: linear-gradient(180deg, rgba(12, 23, 45, 0.92), rgba(7, 14, 28, 0.82));
                     border: 1px solid rgba(255,255,255,0.08);
@@ -111,26 +114,22 @@ def inject_global_css() -> None:
                     min-height: 118px;
                     box-shadow: 0 14px 35px rgba(0,0,0,0.22);
                 }
-
                 .metric-label {
                     color: #cbd5e1;
                     font-size: 0.88rem;
                     margin-bottom: 0.3rem;
                 }
-
                 .metric-value {
                     font-size: 1.65rem;
                     font-weight: 900;
                     color: #ffffff;
                     line-height: 1.15;
                 }
-
                 .metric-caption {
                     color: #93c5fd;
                     font-size: 0.84rem;
                     margin-top: 0.18rem;
                 }
-
                 .risk-banner {
                     border-radius: 26px;
                     padding: 1.15rem 1.15rem;
@@ -138,23 +137,11 @@ def inject_global_css() -> None:
                     margin-bottom: 0.95rem;
                     box-shadow: 0 16px 38px rgba(0,0,0,0.18);
                 }
-
                 .risk-low { background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(8,47,73,0.35)); }
                 .risk-medium { background: linear-gradient(135deg, rgba(245,158,11,0.28), rgba(73,44,8,0.30)); }
                 .risk-high { background: linear-gradient(135deg, rgba(239,68,68,0.28), rgba(69,10,10,0.30)); }
-
-                .risk-title {
-                    font-size: 1.16rem;
-                    font-weight: 900;
-                    margin-bottom: 0.22rem;
-                }
-
-                .risk-text, .small-note {
-                    color: #dde7f3;
-                    line-height: 1.65;
-                    font-size: 0.95rem;
-                }
-
+                .risk-title { font-size: 1.16rem; font-weight: 900; margin-bottom: 0.22rem; }
+                .risk-text, .small-note { color: #dde7f3; line-height: 1.65; font-size: 0.95rem; }
                 .pill {
                     display: inline-block;
                     padding: 0.4rem 0.76rem;
@@ -170,7 +157,6 @@ def inject_global_css() -> None:
                 .pill-amber { background: rgba(245,158,11,0.18); color: #fef3c7; }
                 .pill-red { background: rgba(239,68,68,0.18); color: #fee2e2; }
                 .pill-slate { background: rgba(148,163,184,0.18); color: #e2e8f0; }
-
                 div[data-testid="stForm"] {
                     background: rgba(10, 20, 40, 0.66);
                     border: 1px solid rgba(255,255,255,0.08);
@@ -178,7 +164,6 @@ def inject_global_css() -> None:
                     padding: 0.75rem 1rem 1rem 1rem;
                     box-shadow: 0 22px 60px rgba(0,0,0,0.28);
                 }
-
                 .stButton > button,
                 div[data-testid="stDownloadButton"] > button {
                     border-radius: 16px !important;
@@ -189,12 +174,6 @@ def inject_global_css() -> None:
                     padding: 0.68rem 1rem !important;
                     box-shadow: 0 12px 28px rgba(37,99,235,0.28) !important;
                 }
-
-                .stButton > button:hover,
-                div[data-testid="stDownloadButton"] > button:hover {
-                    transform: translateY(-1px);
-                }
-
                 .cover-shell {
                     position: relative;
                     border-radius: 34px;
@@ -209,32 +188,6 @@ def inject_global_css() -> None:
                     box-shadow: 0 28px 80px rgba(0,0,0,.34);
                     transition: all .35s ease;
                 }
-
-                .cover-shell::before {
-                    content: "";
-                    position: absolute;
-                    inset: 0;
-                    background:
-                        linear-gradient(180deg, rgba(2,6,23,0.18), rgba(2,6,23,0.52)),
-                        radial-gradient(circle at 20% 20%, rgba(59,130,246,.16), transparent 20%),
-                        radial-gradient(circle at 80% 10%, rgba(20,184,166,.14), transparent 16%);
-                    pointer-events: none;
-                }
-
-                .cover-shell:has(.home-card.user-card:hover) {
-                    background:
-                        radial-gradient(circle at 12% 15%, rgba(16,185,129,0.24), transparent 18%),
-                        radial-gradient(circle at 85% 12%, rgba(56,189,248,0.22), transparent 20%),
-                        linear-gradient(135deg, #07161f 0%, #0b2236 45%, #08161d 100%);
-                }
-
-                .cover-shell:has(.home-card.dev-card:hover) {
-                    background:
-                        radial-gradient(circle at 18% 18%, rgba(59,130,246,0.22), transparent 18%),
-                        radial-gradient(circle at 84% 14%, rgba(168,85,247,0.20), transparent 18%),
-                        linear-gradient(135deg, #090c1b 0%, #121a31 45%, #0a1020 100%);
-                }
-
                 .cover-grid {
                     position: relative;
                     z-index: 2;
@@ -244,7 +197,6 @@ def inject_global_css() -> None:
                     align-items: center;
                     min-height: 620px;
                 }
-
                 .cover-title {
                     font-size: 4.15rem;
                     line-height: 0.98;
@@ -254,21 +206,13 @@ def inject_global_css() -> None:
                     margin-bottom: 1rem;
                     max-width: 660px;
                 }
-
                 .cover-copy {
                     font-size: 1.1rem;
                     color: #d7e7ff;
                     line-height: 1.85;
                     max-width: 700px;
                 }
-
-                .cover-pills {
-                    margin-top: 1.2rem;
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 0.65rem;
-                }
-
+                .cover-pills { margin-top: 1.2rem; display: flex; flex-wrap: wrap; gap: 0.65rem; }
                 .cover-pill {
                     padding: 0.66rem 0.9rem;
                     border-radius: 999px;
@@ -278,9 +222,7 @@ def inject_global_css() -> None:
                     font-size: 0.82rem;
                     color: #e5efff;
                 }
-
                 .home-stack { display: grid; gap: 1rem; }
-
                 .home-card {
                     border-radius: 28px;
                     padding: 1.45rem 1.35rem;
@@ -288,73 +230,12 @@ def inject_global_css() -> None:
                     border: 1px solid rgba(255,255,255,0.08);
                     box-shadow: 0 18px 50px rgba(0,0,0,0.28);
                     transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease;
-                }
-
-                .home-card:hover {
-                    transform: translateY(-6px) scale(1.015);
-                    border-color: rgba(125,211,252,.35);
-                    box-shadow: 0 28px 72px rgba(0,0,0,0.34);
-                }
-
-
-                .mode-link {
-                    text-decoration: none !important;
-                    color: inherit !important;
-                    display: block;
-                }
-
-                .home-card {
-                    position: relative;
-                    overflow: hidden;
                     cursor: pointer;
                 }
-
-                .home-card::after {
-                    content: "";
-                    position: absolute;
-                    inset: 0;
-                    background: linear-gradient(135deg, rgba(56,189,248,0.12), rgba(20,184,166,0.05), transparent 68%);
-                    opacity: 0;
-                    transition: opacity .28s ease;
-                    pointer-events: none;
-                }
-
-                .home-card:hover::after {
-                    opacity: 1;
-                }
-
-                .hover-pop {
-                    margin-top: 1rem;
-                    padding: 0.72rem 0.9rem;
-                    border-radius: 16px;
-                    background: rgba(255,255,255,0.06);
-                    border: 1px solid rgba(255,255,255,0.09);
-                    color: #e6f2ff;
-                    font-size: 0.88rem;
-                    font-weight: 700;
-                    opacity: 0;
-                    transform: translateY(10px);
-                    transition: all .28s ease;
-                }
-
-                .home-card:hover .hover-pop {
-                    opacity: 1;
-                    transform: translateY(0px);
-                }
-
-                .home-top {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    gap: 1rem;
-                }
-
-                .home-title {
-                    font-size: 1.82rem;
-                    font-weight: 900;
-                    color: #ffffff;
-                }
-
+                .home-card:hover { transform: translateY(-6px) scale(1.015); border-color: rgba(125,211,252,.35); }
+                .mode-link { text-decoration: none !important; color: inherit !important; display: block; }
+                .home-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+                .home-title { font-size: 1.82rem; font-weight: 900; color: #ffffff; }
                 .home-tag {
                     font-size: 0.76rem;
                     font-weight: 800;
@@ -364,13 +245,7 @@ def inject_global_css() -> None:
                     background: rgba(59,130,246,0.14);
                     border: 1px solid rgba(186,230,253,.16);
                 }
-
-                .home-text {
-                    margin-top: 0.95rem;
-                    color: #d0dcee;
-                    line-height: 1.8;
-                }
-
+                .home-text { margin-top: 0.95rem; color: #d0dcee; line-height: 1.8; }
                 .subtle-label {
                     color: #93c5fd;
                     font-size: 0.85rem;
@@ -379,13 +254,7 @@ def inject_global_css() -> None:
                     text-transform: uppercase;
                     margin-bottom: 0.8rem;
                 }
-
-                .footer-note {
-                    text-align: center;
-                    color: #9bb0cb;
-                    margin-top: 1rem;
-                    font-size: 0.88rem;
-                }
+                .footer-note { text-align: center; color: #9bb0cb; margin-top: 1rem; font-size: 0.88rem; }
             </style>
             """
         ),
@@ -393,6 +262,9 @@ def inject_global_css() -> None:
     )
 
 
+# ==========================================
+# Routing and basic utilities
+# ==========================================
 def get_route() -> str:
     try:
         page = st.query_params.get("page", None)
@@ -403,9 +275,7 @@ def get_route() -> str:
             return str(page)
     except Exception:
         pass
-
-    route = st.session_state.get("route", "home")
-    return str(route)
+    return str(st.session_state.get("route", "home"))
 
 
 def set_route(page: str) -> None:
@@ -442,7 +312,6 @@ def locate_dataset_path() -> Path:
     for candidate in candidates:
         if candidate.exists():
             return candidate
-
     for root in [BASE_DIR, Path.cwd(), BASE_DIR.parent, Path.cwd().parent]:
         try:
             matches = list(root.rglob("ai4i2020.csv"))
@@ -450,7 +319,6 @@ def locate_dataset_path() -> Path:
                 return matches[0]
         except Exception:
             continue
-
     raise FileNotFoundError(
         "Dataset file 'ai4i2020.csv' was not found. Put it in a folder named 'data' next to app.py or in the project root."
     )
@@ -477,12 +345,15 @@ def get_failure_type(row: pd.Series) -> str:
     if int(row["PWF"]) == 1:
         return "Power Failure"
     if int(row["OSF"]) == 1:
-        return "Overload Failure"
+        return "Overstrain Failure"
     if int(row["RNF"]) == 1:
         return "Random Failure"
     return "Unknown"
 
 
+# ==========================================
+# Model training / loading
+# ==========================================
 @st.cache_resource(show_spinner=False)
 def load_or_train_artifacts():
     binary_path = ARTIFACTS_DIR / "binary_model.joblib"
@@ -500,22 +371,15 @@ def load_or_train_artifacts():
         return binary_model, failure_type_model, label_encoder, metrics, metadata
 
     dataset = load_dataset().copy()
-
     X = dataset[FEATURES].copy()
     y = dataset["Machine failure"].astype(int).values
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.20,
-        random_state=1,
-        stratify=y,
+        X, y, test_size=0.20, random_state=1, stratify=y
     )
 
     binary_preprocessor = ColumnTransformer(
-        transformers=[
-            ("type_encoder", OneHotEncoder(drop="first", handle_unknown="ignore"), ["Type"])
-        ],
+        transformers=[("type_encoder", OneHotEncoder(drop="first", handle_unknown="ignore"), ["Type"])],
         remainder="passthrough",
     )
 
@@ -523,7 +387,7 @@ def load_or_train_artifacts():
         steps=[
             ("preprocessor", binary_preprocessor),
             ("imputer", SimpleImputer(strategy="mean")),
-            ("classifier", LogisticRegression(max_iter=2000)),
+            ("classifier", LogisticRegression(max_iter=2000, class_weight={0: 1, 1: 5})),
         ]
     )
     binary_model.fit(X_train, y_train)
@@ -561,9 +425,7 @@ def load_or_train_artifacts():
     )
 
     failure_type_preprocessor = ColumnTransformer(
-        transformers=[
-            ("type_encoder", OneHotEncoder(drop="first", handle_unknown="ignore"), ["Type"])
-        ],
+        transformers=[("type_encoder", OneHotEncoder(drop="first", handle_unknown="ignore"), ["Type"])],
         remainder="passthrough",
     )
 
@@ -621,6 +483,9 @@ def load_or_train_artifacts():
     return binary_model, failure_type_model, label_encoder, metrics, metadata
 
 
+# ==========================================
+# DiCE and Anchor explainers
+# ==========================================
 @st.cache_resource(show_spinner=False)
 def build_dice_explainers():
     if not DICE_AVAILABLE:
@@ -645,11 +510,180 @@ def build_dice_explainers():
     return explainers
 
 
+@st.cache_resource(show_spinner=False)
+def build_anchor_explainer():
+    if not ANCHOR_AVAILABLE:
+        return None
+
+    dataset = load_dataset().copy()
+    binary_model, _, _, _, _ = load_or_train_artifacts()
+
+    X = dataset[FEATURES].copy()
+    y = dataset["Machine failure"].astype(int).values
+
+    X_train, _, _, _ = train_test_split(
+        X, y, test_size=0.20, random_state=1, stratify=y
+    )
+
+    preprocessor = binary_model.named_steps["preprocessor"]
+    imputer = binary_model.named_steps["imputer"]
+    classifier = binary_model.named_steps["classifier"]
+
+    X_train_processed = preprocessor.transform(X_train)
+    if hasattr(X_train_processed, "toarray"):
+        X_train_processed = X_train_processed.toarray()
+    X_train_processed = imputer.transform(X_train_processed)
+
+    feature_names = list(preprocessor.get_feature_names_out())
+
+    def anchor_predict_fn(x):
+        x = np.asarray(x)
+        if x.ndim == 1:
+            x = x.reshape(1, -1)
+        return classifier.predict(x)
+
+    anchor_explainer = AnchorTabular(
+        predictor=anchor_predict_fn,
+        feature_names=feature_names,
+    )
+
+    # More detailed discretization makes numerical ranges more precise.
+    anchor_explainer.fit(
+        X_train_processed,
+        disc_perc=(5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 95),
+    )
+
+    return {
+        "explainer": anchor_explainer,
+        "preprocessor": preprocessor,
+        "imputer": imputer,
+        "classifier": classifier,
+    }
+
+
+def explain_anchor_for_input(input_df: pd.DataFrame, threshold: float = 0.95) -> Dict:
+    if not ANCHOR_AVAILABLE:
+        return {"available": False, "message": "Anchor explanation requires the alibi package."}
+
+    anchor_bundle = build_anchor_explainer()
+    if anchor_bundle is None:
+        return {"available": False, "message": "Anchor explainer could not be initialized."}
+
+    preprocessor = anchor_bundle["preprocessor"]
+    imputer = anchor_bundle["imputer"]
+    classifier = anchor_bundle["classifier"]
+    anchor_explainer = anchor_bundle["explainer"]
+
+    input_processed = preprocessor.transform(input_df)
+    if hasattr(input_processed, "toarray"):
+        input_processed = input_processed.toarray()
+    input_processed = imputer.transform(input_processed)
+
+    prediction = int(classifier.predict(input_processed)[0])
+    probability = float(classifier.predict_proba(input_processed)[0][1])
+
+    try:
+        explanation = anchor_explainer.explain(input_processed[0], threshold=threshold)
+        precision_value = float(np.asarray(explanation.precision).item())
+        coverage_value = float(np.asarray(explanation.coverage).item())
+        anchor_rules = list(explanation.anchor)
+        message = ""
+    except Exception as exc:
+        precision_value = 0.0
+        coverage_value = 0.0
+        anchor_rules = []
+        message = str(exc)
+
+    return {
+        "available": True,
+        "prediction": prediction,
+        "probability": probability,
+        "anchor": anchor_rules,
+        "precision": precision_value,
+        "coverage": coverage_value,
+        "message": message,
+    }
+
+
+def render_anchor_explanation(anchor_info: Dict, show_metrics: bool = False) -> None:
+    st.markdown(
+        '<div class="section-title">Why the Model Made This Prediction</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="section-subtitle">This rule-based explanation highlights the operating conditions that support the current model decision.</div>',
+        unsafe_allow_html=True,
+    )
+
+    if not anchor_info.get("available", False):
+        st.warning(anchor_info.get("message", "Anchor explanation is not available."))
+        return
+
+    anchor_rules = anchor_info.get("anchor", [])
+    if len(anchor_rules) == 0:
+        rule_text = """
+        <div class="small-note">
+            No specific feature-based anchor rule was required for this input.
+            The model decision is already stable for the selected operating condition.
+        </div>
+        """
+    else:
+        rule_items = "".join(["<li>{}</li>".format(rule) for rule in anchor_rules])
+        rule_text = """
+        <div class="small-note">
+            The model decision is mainly supported by the following operating conditions:
+            <ul>{}</ul>
+        </div>
+        """.format(rule_items)
+
+    metrics_html = ""
+    if show_metrics:
+        metrics_html = """
+        <div style="margin-top: 1rem;">
+            <span class="pill pill-blue">Precision: {:.4f}</span>
+            <span class="pill pill-green">Coverage: {:.4f}</span>
+        </div>
+        """.format(anchor_info.get("precision", 0.0), anchor_info.get("coverage", 0.0))
+
+    st.markdown(
+        """
+        <div class="glass-card">
+            {}
+            {}
+        </div>
+        """.format(rule_text, metrics_html),
+        unsafe_allow_html=True,
+    )
+
+
+# ==========================================
+# Helper functions
+# ==========================================
 def get_feature_ranges(df: pd.DataFrame) -> Dict[str, List[float]]:
-    ranges = {}
-    for column in NUMERIC_FEATURES:
-        ranges[column] = [float(df[column].min()), float(df[column].max())]
-    return ranges
+    return {column: [float(df[column].min()), float(df[column].max())] for column in NUMERIC_FEATURES}
+
+
+def get_counterfactual_feature_ranges(df: pd.DataFrame, input_df: pd.DataFrame) -> Dict[str, List[float]]:
+    """
+    Build permitted ranges for counterfactual generation.
+
+    All numeric features can vary across their dataset range, except Tool wear.
+    Tool wear represents accumulated usage, so the counterfactual generator is
+    allowed to keep it unchanged or reduce it, but it is not allowed to increase it.
+    """
+    permitted_range = get_feature_ranges(df)
+
+    tool_wear_feature = "Tool wear [min]"
+    if tool_wear_feature in permitted_range and tool_wear_feature in input_df.columns:
+        dataset_min = float(df[tool_wear_feature].min())
+        dataset_max = float(df[tool_wear_feature].max())
+        current_tool_wear = float(input_df.iloc[0][tool_wear_feature])
+
+        upper_bound = min(current_tool_wear, dataset_max)
+        lower_bound = min(dataset_min, upper_bound)
+        permitted_range[tool_wear_feature] = [lower_bound, upper_bound]
+
+    return permitted_range
 
 
 def infer_risk(probability: float) -> Tuple[str, str, str]:
@@ -744,32 +778,15 @@ def build_probability_gauge(probability: float) -> go.Figure:
             },
         )
     )
-    fig.update_layout(
-        height=320,
-        margin=dict(l=20, r=20, t=55, b=20),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font={"color": "white"},
-    )
+    fig.update_layout(height=320, margin=dict(l=20, r=20, t=55, b=20), paper_bgcolor="rgba(0,0,0,0)", font={"color": "white"})
     return fig
 
 
 def build_comparison_chart(original_row: pd.Series, cf_df: pd.DataFrame, title: str) -> go.Figure:
     fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=NUMERIC_FEATURES,
-            y=[float(original_row[f]) for f in NUMERIC_FEATURES],
-            name="Original",
-        )
-    )
+    fig.add_trace(go.Bar(x=NUMERIC_FEATURES, y=[float(original_row[f]) for f in NUMERIC_FEATURES], name="Original"))
     for index, (_, row) in enumerate(cf_df.iterrows(), start=1):
-        fig.add_trace(
-            go.Bar(
-                x=NUMERIC_FEATURES,
-                y=[float(row[f]) for f in NUMERIC_FEATURES],
-                name="Solution {}".format(index),
-            )
-        )
+        fig.add_trace(go.Bar(x=NUMERIC_FEATURES, y=[float(row[f]) for f in NUMERIC_FEATURES], name="Solution {}".format(index)))
     fig.update_layout(
         barmode="group",
         height=430,
@@ -789,13 +806,7 @@ def build_delta_chart(original_row: pd.Series, cf_df: pd.DataFrame, title: str) 
     fig = go.Figure()
     for index, (_, row) in enumerate(cf_df.iterrows(), start=1):
         deltas = [float(row[f]) - float(original_row[f]) for f in NUMERIC_FEATURES]
-        fig.add_trace(
-            go.Bar(
-                x=NUMERIC_FEATURES,
-                y=deltas,
-                name="Solution {}".format(index),
-            )
-        )
+        fig.add_trace(go.Bar(x=NUMERIC_FEATURES, y=deltas, name="Solution {}".format(index)))
     fig.update_layout(
         barmode="group",
         height=390,
@@ -807,16 +818,7 @@ def build_delta_chart(original_row: pd.Series, cf_df: pd.DataFrame, title: str) 
         yaxis=dict(title="Change from Original"),
         legend=dict(orientation="h", y=1.12, x=0),
         margin=dict(l=20, r=20, t=65, b=45),
-        shapes=[
-            dict(
-                type="line",
-                x0=-0.5,
-                x1=len(NUMERIC_FEATURES) - 0.5,
-                y0=0,
-                y1=0,
-                line=dict(color="rgba(255,255,255,0.32)", width=1),
-            )
-        ],
+        shapes=[dict(type="line", x0=-0.5, x1=len(NUMERIC_FEATURES) - 0.5, y0=0, y1=0, line=dict(color="rgba(255,255,255,0.32)", width=1))],
     )
     return fig
 
@@ -828,19 +830,33 @@ def build_recommendations(original_row: pd.Series, cf_row: pd.Series) -> List[st
         new_value = float(cf_row[column])
         if old_value != new_value:
             direction = "Increase" if new_value > old_value else "Decrease"
-            recommendations.append(
-                "{} {} from {:.2f} to {:.2f}".format(direction, column, old_value, new_value)
-            )
+            recommendations.append("{} {} from {:.2f} to {:.2f}".format(direction, column, old_value, new_value))
     return recommendations
 
 
-def generate_counterfactuals_for_method(
-    method_name: str,
-    input_df: pd.DataFrame,
-    dataset: pd.DataFrame,
-    desired_class,
-    total_cfs: int = 2,
-):
+def calculate_solution_cost(original_row: pd.Series, cf_row: pd.Series, cost_weights: Dict[str, float], dataset: pd.DataFrame) -> float:
+    total_cost = 0.0
+    for feature in NUMERIC_FEATURES:
+        old_value = float(original_row[feature])
+        new_value = float(cf_row[feature])
+        feature_range = float(dataset[feature].max() - dataset[feature].min())
+        normalized_change = 0.0 if feature_range == 0 else abs(new_value - old_value) / feature_range
+        total_cost += normalized_change * float(cost_weights.get(feature, 1.0))
+    return total_cost
+
+
+def generate_counterfactuals_for_method(method_name: str, input_df: pd.DataFrame, dataset: pd.DataFrame, desired_class, total_cfs: int = 2):
+    """
+    Generate counterfactuals for one method.
+
+    Important behavior:
+    - The UI should display up to `total_cfs` valid solutions.
+    - Tool wear is allowed to stay the same or decrease only.
+    - Because invalid tool-wear-increase solutions may be removed after generation,
+      the function internally asks DiCE for more than 2 solutions, then keeps the
+      first valid 2 solutions after filtering.
+    - KDTree can be stricter than Random/Genetic, so it gets a larger internal request.
+    """
     if not DICE_AVAILABLE:
         return None, "DiCE is not installed in this environment. Install dice-ml to activate counterfactual analysis."
 
@@ -848,27 +864,118 @@ def generate_counterfactuals_for_method(
     if explainers is None:
         return None, "Counterfactual explainers could not be initialized."
 
+    tool_wear_feature = "Tool wear [min]"
+    explainer = explainers[method_name]
+
+    # Ask for more candidates than we finally display.
+    # This is necessary because some candidates may be removed by the Tool wear constraint.
+    if method_name == "KDTree":
+        internal_total_cfs = max(total_cfs * 10, 20)
+    elif method_name == "Random":
+        internal_total_cfs = max(total_cfs * 6, 12)
+    else:
+        internal_total_cfs = max(total_cfs * 5, 10)
+
+    def keep_valid_tool_wear_rows(raw_cf_df: Optional[pd.DataFrame]) -> pd.DataFrame:
+        if raw_cf_df is None or raw_cf_df.empty:
+            return pd.DataFrame()
+
+        filtered_df = raw_cf_df.copy()
+
+        if tool_wear_feature in filtered_df.columns and tool_wear_feature in input_df.columns:
+            current_tool_wear = float(input_df.iloc[0][tool_wear_feature])
+            filtered_df = filtered_df[
+                filtered_df[tool_wear_feature].astype(float) <= current_tool_wear + 1e-9
+            ].copy()
+
+        # Remove duplicate solutions after filtering, then show only the requested number.
+        filtered_df = filtered_df.drop_duplicates().head(total_cfs).copy()
+        return filtered_df
+
     try:
-        explainer = explainers[method_name]
         kwargs = {
             "query_instances": input_df,
-            "total_CFs": total_cfs,
+            "total_CFs": internal_total_cfs,
             "desired_class": desired_class,
             "features_to_vary": NUMERIC_FEATURES,
-            "permitted_range": get_feature_ranges(dataset),
+            "permitted_range": get_counterfactual_feature_ranges(dataset, input_df),
         }
+
         if method_name == "Random":
-            kwargs["sample_size"] = 10000
+            kwargs["sample_size"] = 20000
 
         counterfactuals = explainer.generate_counterfactuals(**kwargs)
         cf_df = counterfactuals.cf_examples_list[0].final_cfs_df
-        if cf_df is None or cf_df.empty:
-            return None, "No counterfactual solutions were found for this method."
-        return cf_df, None
+        valid_cf_df = keep_valid_tool_wear_rows(cf_df)
+
+        if not valid_cf_df.empty:
+            return valid_cf_df, None
+
+        # KDTree fallback: if KDTree cannot produce enough valid rows when Tool wear is variable,
+        # retry with Tool wear fixed and allow the other operating parameters to change.
+        if method_name == "KDTree":
+            fallback_features = [feature for feature in NUMERIC_FEATURES if feature != tool_wear_feature]
+            fallback_kwargs = {
+                "query_instances": input_df,
+                "total_CFs": internal_total_cfs,
+                "desired_class": desired_class,
+                "features_to_vary": fallback_features,
+                "permitted_range": {
+                    feature: [float(dataset[feature].min()), float(dataset[feature].max())]
+                    for feature in fallback_features
+                },
+            }
+
+            fallback_counterfactuals = explainer.generate_counterfactuals(**fallback_kwargs)
+            fallback_df = fallback_counterfactuals.cf_examples_list[0].final_cfs_df
+            valid_fallback_df = keep_valid_tool_wear_rows(fallback_df)
+
+            if not valid_fallback_df.empty:
+                return valid_fallback_df, None
+
+        return None, (
+            "No valid counterfactual solutions were found after applying the Tool wear constraint. "
+            "Tool wear is allowed to stay the same or decrease only."
+        )
+
     except Exception as exc:
+        # One more KDTree fallback when the first KDTree call itself raises an exception.
+        if method_name == "KDTree":
+            try:
+                fallback_features = [feature for feature in NUMERIC_FEATURES if feature != tool_wear_feature]
+                fallback_kwargs = {
+                    "query_instances": input_df,
+                    "total_CFs": internal_total_cfs,
+                    "desired_class": desired_class,
+                    "features_to_vary": fallback_features,
+                    "permitted_range": {
+                        feature: [float(dataset[feature].min()), float(dataset[feature].max())]
+                        for feature in fallback_features
+                    },
+                }
+
+                fallback_counterfactuals = explainer.generate_counterfactuals(**fallback_kwargs)
+                fallback_df = fallback_counterfactuals.cf_examples_list[0].final_cfs_df
+                valid_fallback_df = keep_valid_tool_wear_rows(fallback_df)
+
+                if not valid_fallback_df.empty:
+                    return valid_fallback_df, None
+
+            except Exception as fallback_exc:
+                return None,  (
+                     "KDTree did not find a feasible solution for this input under the Tool wear constraint. "
+                    "This means no nearby KDTree counterfactual was available without increasing Tool wear. "
+                     "Please review the Genetic and Random solutions."
+                    
+                )
+
         return None, str(exc)
 
 
+
+# ==========================================
+# Page header and home page
+# ==========================================
 def render_header(title: str, subtitle: str) -> None:
     left, right = st.columns([5, 1])
     with left:
@@ -891,15 +998,15 @@ def render_cover_page() -> None:
                         <div class="subtle-label">Machine Failure Prediction and Explainability Platform</div>
                         <div class="cover-title">Predict failures.<br>Explain the cause.<br>Recommend safer machine settings.</div>
                         <div class="cover-copy">
-                            A premium two-mode experience for operators, supervisors, and technical reviewers.
-                            Move the mouse over any card to preview it, then click the card itself to open the workspace.
-                            The user workspace is designed for live prediction and safer-setting guidance, while the developer workspace is designed for data exploration, metrics, and detailed counterfactual analysis.
+                            A two-mode experience for operators, supervisors, and technical reviewers.
+                            User Mode is designed for live prediction, anchor explanations, custom cost values, and safer-setting guidance.
+                            Developer Mode is designed for dataset exploration, model inspection, anchor precision and coverage, and detailed counterfactual analysis.
                         </div>
                         <div class="cover-pills">
                             <div class="cover-pill">Binary Failure Prediction</div>
                             <div class="cover-pill">Failure Type Classification</div>
-                            <div class="cover-pill">Three Counterfactual Methods</div>
-                            <div class="cover-pill">Interactive Data Exploration</div>
+                            <div class="cover-pill">Anchor Explanation</div>
+                            <div class="cover-pill">Cost-Aware Counterfactuals</div>
                         </div>
                     </div>
                     <div class="home-stack">
@@ -910,10 +1017,9 @@ def render_cover_page() -> None:
                                     <div class="home-tag">Operational</div>
                                 </div>
                                 <div class="home-text">
-                                    Enter live machine sensor readings, estimate failure probability, inspect the risk level,
-                                    identify the predicted failure type, and compare all available counterfactual solutions against the original settings.
+                                    Enter live machine sensor readings, define the cost of changing each feature,
+                                    inspect why the model made the prediction, and receive cost-ranked counterfactual recommendations.
                                 </div>
-                                <div class="hover-pop">Click to open the live prediction workspace.</div>
                             </div>
                         </a>
                         <a class="mode-link" href="?page=developer" target="_self">
@@ -923,10 +1029,9 @@ def render_cover_page() -> None:
                                     <div class="home-tag">Analytical</div>
                                 </div>
                                 <div class="home-text">
-                                    Browse the full dataset, choose any columns, build charts, inspect metrics, select any row,
-                                    and generate detailed counterfactual analysis with graphs, deltas, and solution tables.
+                                    Browse the dataset, inspect metrics, create charts, select any row,
+                                    view anchor precision and coverage, and run detailed counterfactual analysis.
                                 </div>
-                                <div class="hover-pop">Click to open the analytics and inspection workspace.</div>
                             </div>
                         </a>
                     </div>
@@ -936,157 +1041,286 @@ def render_cover_page() -> None:
         ),
         unsafe_allow_html=True,
     )
-
-    st.markdown(
-        '<div class="footer-note">Each card is clickable. Hover to make it pop up, then click anywhere on the card to enter that mode.</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="footer-note">Each card is clickable. Click any card to enter that workspace.</div>', unsafe_allow_html=True)
 
 
+# ==========================================
+# Counterfactual rendering with user-defined cost ranking
+# ==========================================
 def render_method_outputs(
     input_df: pd.DataFrame,
     dataset: pd.DataFrame,
     desired_class,
     key_prefix: str,
+    cost_weights: Optional[Dict[str, float]] = None,
 ) -> None:
+    """
+    Render counterfactual outputs in the requested layout:
+    - Cost-based ranking table at the top.
+    - Method tabs.
+    - Recommended Actions cards on the left.
+    - Visual comparison charts on the right.
+    - Full counterfactual table under the actions/charts.
+
+    The action cards are built as one continuous HTML string so the
+    increase/decrease actions stay inside the card.
+    """
+    if cost_weights is None:
+        cost_weights = {feature: 1.0 for feature in NUMERIC_FEATURES}
+
     method_names = ["Genetic", "Random", "KDTree"]
-    tabs = st.tabs(method_names)
     original_row = input_df.iloc[0]
+    method_results = {}
+    ranking_rows = []
+
+    for method_name in method_names:
+        with st.spinner("Running {} counterfactual search...".format(method_name)):
+            cf_df, error_message = generate_counterfactuals_for_method(
+                method_name=method_name,
+                input_df=input_df,
+                dataset=dataset,
+                desired_class=desired_class,
+                total_cfs=2,
+            )
+
+        method_results[method_name] = {
+            "cf_df": cf_df,
+            "error": error_message,
+        }
+
+        if cf_df is not None and not cf_df.empty:
+            for solution_number, (_, row) in enumerate(cf_df.iterrows(), start=1):
+                total_cost = calculate_solution_cost(
+                    original_row=original_row,
+                    cf_row=row,
+                    cost_weights=cost_weights,
+                    dataset=dataset,
+                )
+
+                changed_features = [
+                    feature
+                    for feature in NUMERIC_FEATURES
+                    if float(original_row[feature]) != float(row[feature])
+                ]
+
+                ranking_rows.append(
+                    {
+                        "Method": method_name,
+                        "Solution": solution_number,
+                        "Cost Score": round(total_cost, 4),
+                        "Changed Features": ", ".join(changed_features) if changed_features else "No change",
+                    }
+                )
+
+    if ranking_rows:
+        ranking_df = (
+            pd.DataFrame(ranking_rows)
+            .sort_values("Cost Score", ascending=True)
+            .reset_index(drop=True)
+        )
+        ranking_df.insert(0, "Rank", range(1, len(ranking_df) + 1))
+
+        st.markdown(
+            '<div class="section-title">Cost-Based Recommended Solutions</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="section-subtitle">'
+            "The table ranks all generated counterfactual solutions using the feature-change "
+            "costs entered by the user. Lower cost indicates a more practical solution."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.dataframe(ranking_df, use_container_width=True)
+
+        best_solution = ranking_df.iloc[0]
+        st.success(
+            "Best practical solution: {} solution {} with the lowest cost score ({:.4f}).".format(
+                best_solution["Method"],
+                int(best_solution["Solution"]),
+                float(best_solution["Cost Score"]),
+            )
+        )
+
+    tabs = st.tabs(method_names)
 
     for tab, method_name in zip(tabs, method_names):
         with tab:
-            with st.spinner("Running {} counterfactual search...".format(method_name)):
-                cf_df, error_message = generate_counterfactuals_for_method(
-                    method_name=method_name,
-                    input_df=input_df,
-                    dataset=dataset,
-                    desired_class=desired_class,
-                    total_cfs=2,
-                )
+            cf_df = method_results[method_name]["cf_df"]
+            error_message = method_results[method_name]["error"]
 
             if error_message:
                 st.warning("{}: {}".format(method_name, error_message))
                 continue
 
-            left, right = st.columns(2, gap="large")
-            with left:
+            if cf_df is None or cf_df.empty:
+                st.warning("{}: No counterfactual solutions were found.".format(method_name))
+                continue
+
+            action_col, chart_col = st.columns([0.95, 1.05], gap="large")
+
+            with action_col:
+                st.markdown(
+                    '<div class="section-title" style="font-size:1.15rem;">Recommended Actions</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    '<div class="section-subtitle">'
+                    "Each solution is translated into direct increase/decrease instructions "
+                    "so non-technical users can understand the required machine setting changes."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
+                for idx, (_, row) in enumerate(cf_df.iterrows()):
+                    recs = build_recommendations(original_row, row)
+                    solution_cost = calculate_solution_cost(
+                        original_row=original_row,
+                        cf_row=row,
+                        cost_weights=cost_weights,
+                        dataset=dataset,
+                    )
+
+                    if recs:
+                        action_rows = "".join(
+                            "<div style='display:flex; gap:0.55rem; align-items:flex-start; margin:0.58rem 0;'>"
+                            "<span style='font-size:1.05rem; line-height:1.45;'>•</span>"
+                            "<span>{}</span>"
+                            "</div>".format(html.escape(str(rec)))
+                            for rec in recs
+                        )
+                    else:
+                        action_rows = (
+                            "<div style='display:flex; gap:0.55rem; align-items:flex-start; margin:0.58rem 0;'>"
+                            "<span style='font-size:1.05rem; line-height:1.45;'>•</span>"
+                            "<span>No numeric changes were returned for this solution.</span>"
+                            "</div>"
+                        )
+
+                    card_html = (
+                        "<div class='glass-card' style='min-height:360px; margin-bottom:1rem; padding:1.25rem 1.35rem;'>"
+                        "<div class='section-title' style='font-size:1.08rem; margin-bottom:0.45rem;'>"
+                        f"Solution {idx + 1}"
+                        "</div>"
+                        "<div class='small-note' style='margin-bottom:0.75rem;'>"
+                        f"Cost score: <strong>{solution_cost:.4f}</strong>"
+                        "</div>"
+                        "<div class='small-note' style='margin-bottom:0.45rem; font-weight:700;'>"
+                        "Recommended feature changes:"
+                        "</div>"
+                        "<div class='small-note' style='line-height:1.65;'>"
+                        f"{action_rows}"
+                        "</div>"
+                        "</div>"
+                    )
+                    st.markdown(card_html, unsafe_allow_html=True)
+
+            with chart_col:
+                st.markdown(
+                    '<div class="section-title" style="font-size:1.15rem;">Visual Comparison</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    '<div class="section-subtitle">'
+                    "The charts compare the original machine settings with the generated "
+                    "counterfactual solutions and show the exact change from the original values."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
                 st.plotly_chart(
-                    build_comparison_chart(original_row, cf_df, "{} • Original vs Counterfactual Values".format(method_name)),
+                    build_comparison_chart(
+                        original_row,
+                        cf_df,
+                        "{} • Original vs Counterfactual Values".format(method_name),
+                    ),
                     use_container_width=True,
                     key="{}_{}_compare".format(key_prefix, method_name),
                 )
-            with right:
+
                 st.plotly_chart(
-                    build_delta_chart(original_row, cf_df, "{} • Change from Original Settings".format(method_name)),
+                    build_delta_chart(
+                        original_row,
+                        cf_df,
+                        "{} • Change from Original Settings".format(method_name),
+                    ),
                     use_container_width=True,
                     key="{}_{}_delta".format(key_prefix, method_name),
                 )
-
-            cols = st.columns(len(cf_df))
-            for idx, (_, row) in enumerate(cf_df.iterrows()):
-                recs = build_recommendations(original_row, row)
-                with cols[idx]:
-                    st.markdown(
-                        dedent(
-                            """
-                            <div class="glass-card" style="min-height: 250px;">
-                                <div class="section-title" style="font-size:1.05rem;">Solution {}</div>
-                                <div class="small-note">Recommended feature changes:</div>
-                            """.format(idx + 1)
-                        ),
-                        unsafe_allow_html=True,
-                    )
-                    if recs:
-                        for rec in recs:
-                            st.markdown("- {}".format(rec))
-                    else:
-                        st.markdown("- No numeric changes were returned for this solution.")
-                    st.markdown("</div>", unsafe_allow_html=True)
 
             with st.expander("View {} counterfactual table".format(method_name)):
                 st.dataframe(cf_df, use_container_width=True)
 
 
+# ==========================================
+# User Mode
+# ==========================================
 def render_user_mode() -> None:
     render_header(
         "User Mode",
-        "Enter machine operating conditions, predict the failure state, and compare all three counterfactual methods against the original machine settings.",
+        "Enter machine operating conditions, define feature-change costs, view the model explanation, and compare cost-ranked counterfactual solutions.",
     )
 
     dataset = load_dataset()
     binary_model, failure_type_model, label_encoder, metrics, metadata = load_or_train_artifacts()
 
-    st.markdown(
-        '<div class="small-note" style="margin-bottom:0.9rem;">Dataset source: {}</div>'.format(get_dataset_path_text()),
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="small-note" style="margin-bottom:0.9rem;">Dataset source: {}</div>'.format(get_dataset_path_text()), unsafe_allow_html=True)
 
     left, right = st.columns([0.96, 1.14], gap="large")
     type_options = sorted(dataset["Type"].dropna().unique().tolist())
     numeric_ranges = {
-        feature: (
-            float(dataset[feature].min()),
-            float(dataset[feature].max()),
-            float(dataset[feature].median()),
-        )
+        feature: (float(dataset[feature].min()), float(dataset[feature].max()), float(dataset[feature].median()))
         for feature in NUMERIC_FEATURES
     }
 
     with left:
         st.markdown('<div class="section-title">Machine Input Panel</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-subtitle">Provide the current sensor readings to estimate failure probability, identify the likely failure type, and generate safer-setting alternatives.</div>',
+            '<div class="section-subtitle">Provide the current sensor readings and the relative cost of changing each operating feature.</div>',
             unsafe_allow_html=True,
         )
-        st.caption("Inputs are now flexible. The app no longer forces dataset min or max limits while you type.")
         with st.form("user_form", clear_on_submit=False):
             machine_type = st.selectbox("Machine Type", options=type_options)
             c1, c2 = st.columns(2)
             with c1:
-                air_temp = st.number_input(
-                    "Air temperature [K]",
-                    value=float(numeric_ranges["Air temperature [K]"][2]),
-                    step=0.1,
-                    format="%.2f",
-                )
-                process_temp = st.number_input(
-                    "Process temperature [K]",
-                    value=float(numeric_ranges["Process temperature [K]"][2]),
-                    step=0.1,
-                    format="%.2f",
-                )
-                rotational_speed = st.number_input(
-                    "Rotational speed [rpm]",
-                    value=float(numeric_ranges["Rotational speed [rpm]"][2]),
-                    step=1.0,
-                    format="%.2f",
-                )
+                air_temp = st.number_input("Air temperature [K]", value=float(numeric_ranges["Air temperature [K]"][2]), step=0.1, format="%.2f")
+                process_temp = st.number_input("Process temperature [K]", value=float(numeric_ranges["Process temperature [K]"][2]), step=0.1, format="%.2f")
+                rotational_speed = st.number_input("Rotational speed [rpm]", value=float(numeric_ranges["Rotational speed [rpm]"][2]), step=1.0, format="%.2f")
             with c2:
-                torque = st.number_input(
-                    "Torque [Nm]",
-                    value=float(numeric_ranges["Torque [Nm]"][2]),
-                    step=0.1,
-                    format="%.2f",
-                )
-                tool_wear = st.number_input(
-                    "Tool wear [min]",
-                    value=float(numeric_ranges["Tool wear [min]"][2]),
-                    step=1.0,
-                    format="%.2f",
-                )
+                torque = st.number_input("Torque [Nm]", value=float(numeric_ranges["Torque [Nm]"][2]), step=0.1, format="%.2f")
+                tool_wear = st.number_input("Tool wear [min]", value=float(numeric_ranges["Tool wear [min]"][2]), step=1.0, format="%.2f")
                 st.markdown("<div style='height: 2rem'></div>", unsafe_allow_html=True)
+
+            st.markdown("##### Cost of Feature Changes")
+            st.caption("Higher values mean the feature is harder, more expensive, or less practical to modify.")
+            cost_col1, cost_col2 = st.columns(2)
+            with cost_col1:
+                air_cost = st.number_input("Cost: Air temperature", min_value=0.0, value=1.0, step=0.1)
+                process_cost = st.number_input("Cost: Process temperature", min_value=0.0, value=1.0, step=0.1)
+                speed_cost = st.number_input("Cost: Rotational speed", min_value=0.0, value=2.0, step=0.1)
+            with cost_col2:
+                torque_cost = st.number_input("Cost: Torque", min_value=0.0, value=2.0, step=0.1)
+                tool_wear_cost = st.number_input("Cost: Tool wear", min_value=0.0, value=3.0, step=0.1)
+
             submit = st.form_submit_button("Run Prediction")
 
-        st.caption("Suggested dataset operating ranges: Air temperature {:.1f}–{:.1f} K, Process temperature {:.1f}–{:.1f} K, Rotational speed {:.0f}–{:.0f} rpm, Torque {:.1f}–{:.1f} Nm, Tool wear {:.0f}–{:.0f} min. These are only guidance values, not typing restrictions.".format(numeric_ranges['Air temperature [K]'][0], numeric_ranges['Air temperature [K]'][1], numeric_ranges['Process temperature [K]'][0], numeric_ranges['Process temperature [K]'][1], numeric_ranges['Rotational speed [rpm]'][0], numeric_ranges['Rotational speed [rpm]'][1], numeric_ranges['Torque [Nm]'][0], numeric_ranges['Torque [Nm]'][1], numeric_ranges['Tool wear [min]'][0], numeric_ranges['Tool wear [min]'][1]))
 
         st.markdown(
             dedent(
                 """
-                <div class="glass-card">
-                    <div class="section-title" style="font-size:1.05rem;">Operator Guidance</div>
+                <div class="glass-card" style="margin-top:1rem;">
+                    <div class="section-title" style="font-size:1.05rem;">Input Feature Definitions</div>
                     <div class="small-note">
-                        This workspace is designed for direct use. Start with the current machine settings,
-                        read the prediction summary, then inspect all three counterfactual methods to see what should change.
+                        <strong>Machine Type:</strong> Product quality category used by the dataset.
+                        <br><strong>Air temperature:</strong> Ambient air temperature around the machine.
+                        <br><strong>Process temperature:</strong> Temperature generated during the machine process.
+                        <br><strong>Rotational speed:</strong> Shaft rotation speed measured in revolutions per minute.
+                        <br><strong>Torque:</strong> Rotational force applied during operation.
+                        <br><strong>Tool wear:</strong> Accumulated tool usage time measured in minutes.
+                    </div>
+                    <div class="small-note" style="margin-top:0.85rem;">
+                        Counterfactual recommendations only allow the tool wear value to be maintained
+                        or reduced; the system does not recommend increasing tool wear.
                     </div>
                 </div>
                 """
@@ -1102,16 +1336,9 @@ def render_user_mode() -> None:
                     <div class="glass-card" style="min-height: 520px; display:flex; flex-direction:column; justify-content:center;">
                         <div class="section-title" style="font-size:1.45rem;">Ready for Live Prediction</div>
                         <div class="small-note">
-                            Enter the machine readings on the left, then run the prediction.
-                            The app will display:
-                            <ul>
-                                <li>Binary failure decision</li>
-                                <li>Failure probability gauge</li>
-                                <li>Risk interpretation and action guidance</li>
-                                <li>Failure type, when applicable</li>
-                                <li>Genetic, Random, and KDTree counterfactual methods</li>
-                                <li>Graphs comparing each method with the original settings</li>
-                            </ul>
+                            Enter the machine readings and feature-change costs on the left, then run the prediction.
+                            The app will display the prediction result, risk interpretation, anchor explanation,
+                            and cost-ranked counterfactual recommendations.
                         </div>
                     </div>
                     """
@@ -1130,6 +1357,14 @@ def render_user_mode() -> None:
                 "Tool wear [min]": tool_wear,
             }
         ])
+
+        user_cost_weights = {
+            "Air temperature [K]": air_cost,
+            "Process temperature [K]": process_cost,
+            "Rotational speed [rpm]": speed_cost,
+            "Torque [Nm]": torque_cost,
+            "Tool wear [min]": tool_wear_cost,
+        }
 
         failure_prob = float(binary_model.predict_proba(input_df)[0][1])
         failure_pred = int(binary_model.predict(input_df)[0])
@@ -1183,9 +1418,16 @@ def render_user_mode() -> None:
                 unsafe_allow_html=True,
             )
 
+        anchor_info = explain_anchor_for_input(input_df, threshold=0.95)
+        render_anchor_explanation(anchor_info, show_metrics=False)
+
         st.markdown('<div class="section-title">Counterfactual Analysis</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-subtitle">All three methods are shown below. Each method compares the original settings with the suggested alternatives and highlights the exact changes.</div>',
+            '<div class="section-subtitle">All three methods are shown below. Solutions are ranked according to the feature-change costs you entered.</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="small-note" style="margin-bottom:0.75rem;">Tool wear is treated as an accumulated-usage feature: counterfactual recommendations may keep it unchanged or reduce it, but they cannot increase it.</div>',
             unsafe_allow_html=True,
         )
 
@@ -1201,45 +1443,34 @@ def render_user_mode() -> None:
             )
         else:
             desired_class = "opposite"
-            st.info(
-                "The current input is already predicted as No Failure. To still let you compare all methods, the app generates opposite-class stress-test counterfactuals for analysis."
-            )
+            st.info("The current input is already predicted as No Failure. The app generates opposite-class stress-test counterfactuals for analysis.")
 
-        render_method_outputs(input_df=input_df, dataset=dataset, desired_class=desired_class, key_prefix="user")
+        render_method_outputs(
+            input_df=input_df,
+            dataset=dataset,
+            desired_class=desired_class,
+            key_prefix="user",
+            cost_weights=user_cost_weights,
+        )
 
 
+# ==========================================
+# Developer Mode
+# ==========================================
 def render_confusion_heatmap(matrix_values: List[List[int]], x_labels: List[str], y_labels: List[str], title: str) -> go.Figure:
     fig = go.Figure(
-        data=go.Heatmap(
-            z=matrix_values,
-            x=x_labels,
-            y=y_labels,
-            colorscale="Blues",
-            text=matrix_values,
-            texttemplate="%{text}",
-        )
+        data=go.Heatmap(z=matrix_values, x=x_labels, y=y_labels, colorscale="Blues", text=matrix_values, texttemplate="%{text}")
     )
-    fig.update_layout(
-        title=title,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white"),
-        height=360,
-        margin=dict(l=20, r=20, t=55, b=20),
-    )
+    fig.update_layout(title=title, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="white"), height=360, margin=dict(l=20, r=20, t=55, b=20))
     return fig
 
 
 def render_data_explorer(dataset: pd.DataFrame) -> None:
     st.markdown('<div class="section-title">Dataset Explorer</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-subtitle">Select any columns, filter the dataset, browse rows, and generate custom visualizations.</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="section-subtitle">Select columns, filter the dataset, browse rows, and generate custom visualizations.</div>', unsafe_allow_html=True)
 
     all_columns = dataset.columns.tolist()
     default_columns = [col for col in FEATURES + ["Machine failure"] if col in all_columns]
-
     c1, c2, c3, c4 = st.columns([1.25, 1.0, 0.9, 0.9], gap="large")
     with c1:
         selected_columns = st.multiselect("Columns to display", options=all_columns, default=default_columns)
@@ -1257,16 +1488,10 @@ def render_data_explorer(dataset: pd.DataFrame) -> None:
     display_df = filtered_df[display_columns].head(row_limit)
 
     st.dataframe(display_df, use_container_width=True, height=420)
-    st.download_button(
-        "Download current table as CSV",
-        data=display_df.to_csv(index=False).encode("utf-8"),
-        file_name="filtered_machine_data.csv",
-        mime="text/csv",
-    )
+    st.download_button("Download current table as CSV", data=display_df.to_csv(index=False).encode("utf-8"), file_name="filtered_machine_data.csv", mime="text/csv")
 
     st.markdown('<div class="section-title" style="margin-top:1rem;">Visualization Builder</div>', unsafe_allow_html=True)
     numeric_columns = [col for col in filtered_df.columns if pd.api.types.is_numeric_dtype(filtered_df[col])]
-
     if len(numeric_columns) < 1:
         st.info("No numeric columns are available for visualization.")
         return
@@ -1287,44 +1512,24 @@ def render_data_explorer(dataset: pd.DataFrame) -> None:
     elif chart_type == "Box Plot":
         fig = px.box(filtered_df, x="Type", y=x_column, color="Type", title="{} by Machine Type".format(x_column))
     elif chart_type == "Scatter Plot" and y_column:
-        fig = px.scatter(
-            filtered_df,
-            x=x_column,
-            y=y_column,
-            color=filtered_df["Machine failure"].map({0: "No Failure", 1: "Failure"}),
-            hover_data=FEATURES,
-            title="{} vs {}".format(y_column, x_column),
-        )
+        fig = px.scatter(filtered_df, x=x_column, y=y_column, color=filtered_df["Machine failure"].map({0: "No Failure", 1: "Failure"}), hover_data=FEATURES, title="{} vs {}".format(y_column, x_column))
     elif chart_type == "Line Plot" and y_column:
         temp_df = filtered_df.reset_index(drop=False)
         fig = px.line(temp_df, x=x_column, y=y_column, color="Type", title="{} vs {}".format(y_column, x_column))
 
     if fig is not None:
-        fig.update_layout(
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="white"),
-            legend=dict(orientation="h", y=1.1, x=0),
-            margin=dict(l=20, r=20, t=50, b=20),
-        )
+        fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="white"), legend=dict(orientation="h", y=1.1, x=0), margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig, use_container_width=True)
 
 
 def render_developer_row_lab(dataset: pd.DataFrame, binary_model, failure_type_model, label_encoder) -> None:
     st.markdown('<div class="section-title">Row Counterfactual Lab</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-subtitle">Choose any row from the dataset and inspect all three counterfactual methods with charts, deltas, and solution tables.</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="section-subtitle">Choose any row, inspect anchor precision and coverage, and compare counterfactual methods with charts and solution tables.</div>', unsafe_allow_html=True)
 
     left, right = st.columns([0.9, 1.1], gap="large")
     with left:
         row_index = st.number_input("Dataset row index", min_value=0, max_value=len(dataset) - 1, value=0, step=1)
-        target_mode = st.radio(
-            "Counterfactual target",
-            options=["Safer State (No Failure)", "Opposite Prediction"],
-            horizontal=False,
-        )
+        target_mode = st.radio("Counterfactual target", options=["Safer State (No Failure)", "Opposite Prediction"], horizontal=False)
     with right:
         selected_row = dataset.iloc[int(row_index)][FEATURES].copy()
         input_df = pd.DataFrame([selected_row.to_dict()])
@@ -1343,6 +1548,9 @@ def render_developer_row_lab(dataset: pd.DataFrame, binary_model, failure_type_m
         metric_card("Failure Probability", "{:.2f}%".format(probability * 100), "Binary probability")
     with c3:
         metric_card("Failure Type", failure_type_label or "Not Applicable", "Conditional multiclass output")
+
+    anchor_info = explain_anchor_for_input(input_df, threshold=0.95)
+    render_anchor_explanation(anchor_info, show_metrics=True)
 
     if not DICE_AVAILABLE:
         st.warning("Counterfactual analysis requires the dice-ml package in your environment.")
@@ -1363,10 +1571,7 @@ def render_model_metrics(metrics: Dict) -> None:
         st.json(metrics.get("binary", {}), expanded=False)
         cm = metrics.get("binary", {}).get("confusion_matrix", [])
         if cm:
-            st.plotly_chart(
-                render_confusion_heatmap(cm, ["Predicted No Failure", "Predicted Failure"], ["Actual No Failure", "Actual Failure"], "Binary Confusion Matrix"),
-                use_container_width=True,
-            )
+            st.plotly_chart(render_confusion_heatmap(cm, ["Predicted No Failure", "Predicted Failure"], ["Actual No Failure", "Actual Failure"], "Binary Confusion Matrix"), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
     with right:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -1375,10 +1580,7 @@ def render_model_metrics(metrics: Dict) -> None:
         cm2 = metrics.get("failure_type", {}).get("confusion_matrix", [])
         classes = metrics.get("failure_type", {}).get("classes", [])
         if cm2 and classes:
-            st.plotly_chart(
-                render_confusion_heatmap(cm2, classes, classes, "Failure Type Confusion Matrix"),
-                use_container_width=True,
-            )
+            st.plotly_chart(render_confusion_heatmap(cm2, classes, classes, "Failure Type Confusion Matrix"), use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -1392,14 +1594,7 @@ def render_feature_analysis(binary_model, failure_type_model) -> None:
             coefficients = binary_model.named_steps["classifier"].coef_[0]
             coef_df = pd.DataFrame({"Feature": feature_names, "Coefficient": coefficients}).sort_values("Coefficient", ascending=False)
             fig = px.bar(coef_df, x="Coefficient", y="Feature", orientation="h", title="Binary Model Coefficients")
-            fig.update_layout(
-                height=520,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="white"),
-                margin=dict(l=20, r=20, t=50, b=20),
-                yaxis=dict(autorange="reversed"),
-            )
+            fig.update_layout(height=520, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="white"), margin=dict(l=20, r=20, t=50, b=20), yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig, use_container_width=True)
             with st.expander("Coefficient table"):
                 st.dataframe(coef_df, use_container_width=True)
@@ -1413,18 +1608,9 @@ def render_feature_analysis(binary_model, failure_type_model) -> None:
         try:
             xgb_classifier = failure_type_model.named_steps["classifier"]
             xgb_features = failure_type_model.named_steps["preprocessor"].get_feature_names_out()
-            importance_df = pd.DataFrame(
-                {"Feature": xgb_features, "Importance": xgb_classifier.feature_importances_}
-            ).sort_values("Importance", ascending=False)
+            importance_df = pd.DataFrame({"Feature": xgb_features, "Importance": xgb_classifier.feature_importances_}).sort_values("Importance", ascending=False)
             fig = px.bar(importance_df, x="Importance", y="Feature", orientation="h", title="Failure Type Model Importance")
-            fig.update_layout(
-                height=520,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="white"),
-                margin=dict(l=20, r=20, t=50, b=20),
-                yaxis=dict(autorange="reversed"),
-            )
+            fig.update_layout(height=520, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font=dict(color="white"), margin=dict(l=20, r=20, t=50, b=20), yaxis=dict(autorange="reversed"))
             st.plotly_chart(fig, use_container_width=True)
             with st.expander("Importance table"):
                 st.dataframe(importance_df, use_container_width=True)
@@ -1436,56 +1622,89 @@ def render_feature_analysis(binary_model, failure_type_model) -> None:
 def render_developer_mode() -> None:
     render_header(
         "Developer Mode",
-        "Browse the dataset, inspect metrics, analyze feature behavior, choose any row, and compare every counterfactual method with detailed graphs.",
+        "Browse the dataset, inspect summary metrics, analyze feature behavior, choose any row, view anchor precision and coverage, and compare counterfactual methods.",
     )
 
     dataset = load_dataset()
     binary_model, failure_type_model, label_encoder, metrics, metadata = load_or_train_artifacts()
 
     st.markdown(
-        '<div class="small-note" style="margin-bottom:0.9rem;">Dataset source: {}</div>'.format(get_dataset_path_text()),
+        '<div class="small-note" style="margin-bottom:0.9rem;">Dataset source: {}</div>'.format(
+            get_dataset_path_text()
+        ),
         unsafe_allow_html=True,
     )
 
     m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        metric_card("Dataset Rows", "{:,}".format(len(dataset)), "Total observations")
-    with m2:
-        metric_card("Binary Test Accuracy", "{:.3f}".format(metrics.get("binary", {}).get("test_accuracy", 0.0)), "Holdout evaluation")
-    with m3:
-        metric_card("Failure Type Test Accuracy", "{:.3f}".format(metrics.get("failure_type", {}).get("test_accuracy", 0.0)), "Multiclass evaluation")
-    with m4:
-        metric_card("Counterfactual Engine", "DiCE" if DICE_AVAILABLE else "Unavailable", "Explainability module")
 
-    tabs = st.tabs(["Dataset Explorer", "Model Metrics", "Feature Analysis", "Row Counterfactual Lab"])
+    with m1:
+        metric_card(
+            "Dataset Rows",
+            "{:,}".format(len(dataset)),
+            "Total observations"
+        )
+
+    with m2:
+        metric_card(
+            "Binary Test Accuracy",
+            "{:.3f}".format(metrics.get("binary", {}).get("test_accuracy", 0.0)),
+            "Holdout evaluation"
+        )
+
+    with m3:
+        metric_card(
+            "Failure Type Test Accuracy",
+            "{:.3f}".format(metrics.get("failure_type", {}).get("test_accuracy", 0.0)),
+            "Multiclass evaluation"
+        )
+
+    with m4:
+        engines = []
+        engines.append("DiCE" if DICE_AVAILABLE else "No DiCE")
+        engines.append("Anchor" if ANCHOR_AVAILABLE else "No Anchor")
+        metric_card(
+            "Explainability Engine",
+            " + ".join(engines),
+            "Counterfactual and rule-based XAI"
+        )
+
+    tabs = st.tabs([
+        "Dataset Explorer",
+        "Feature Analysis",
+        "Row Counterfactual Lab"
+    ])
+
     with tabs[0]:
         render_data_explorer(dataset)
+
     with tabs[1]:
-        render_model_metrics(metrics)
-    with tabs[2]:
         render_feature_analysis(binary_model, failure_type_model)
-    with tabs[3]:
-        render_developer_row_lab(dataset, binary_model, failure_type_model, label_encoder)
+
+    with tabs[2]:
+        render_developer_row_lab(
+            dataset,
+            binary_model,
+            failure_type_model,
+            label_encoder
+        )
 
 
+# ==========================================
+# Footer and app entrypoint
+# ==========================================
 def render_footer() -> None:
-    st.markdown(
-        '<div class="footer-note">Machine Failure Prediction and Explainability Dashboard • Streamlit Interface • User and Developer Workspaces</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="footer-note">Machine Failure Prediction and Explainability Dashboard • Streamlit Interface • User and Developer Workspaces</div>', unsafe_allow_html=True)
 
 
 def main() -> None:
     inject_global_css()
     route = get_route()
-
     if route == "user":
         render_user_mode()
     elif route == "developer":
         render_developer_mode()
     else:
         render_cover_page()
-
     render_footer()
 
 
